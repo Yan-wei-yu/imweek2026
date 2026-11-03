@@ -6,9 +6,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 講者帳號：在 host.html 用 Google 登入後，頁面會顯示 UID，把 HOST_UID 換成它（多個用逗號隔開）
+    // 講者帳號的 UID（在 host.html 用 Google 登入後頁面會顯示）；要加別的講者帳號，用逗號隔開
     function isHost() {
-      return request.auth != null && request.auth.uid in ["HOST_UID"];
+      return request.auth != null && request.auth.uid in ["XWcMMhdHj3bli5uhKeVQQruRQ733"];
     }
 
     function signedIn() {

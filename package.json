@@ -1,0 +1,9 @@
+{
+  "name": "imweek2026-live",
+  "private": true,
+  "type": "module",
+  "description": "2026 資管週第三節的即時互動頁：投票、文字雲、討論留言、Q&A",
+  "scripts": {
+    "test": "node --test"
+  }
+}

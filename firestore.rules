@@ -1,0 +1,122 @@
+rules_version = '2';
+
+// 2026 資管週第三節互動頁的資料規則
+// 發布：Firebase 主控台 → Firestore Database → 規則 → 整份貼上 → 發布
+// 改了場次、題目、每人則數時，js/config.js、js/activities.js 也要一起改（npm test 會檢查）
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 講者帳號：在 host.html 用 Google 登入後，頁面會顯示 UID，把 HOST_UID 換成它（多個用逗號隔開）
+    function isHost() {
+      return request.auth != null && request.auth.uid in ["HOST_UID"];
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // 只開放這兩場：正式場、彩排
+    function knownSession(sid) {
+      return sid in ["imweek2026", "rehearsal"];
+    }
+
+    // 講者目前切到哪一題；只有那一題收得到回答
+    function activityIs(sid, activity) {
+      return get(/databases/$(database)/documents/sessions/$(sid)).data.activity == activity;
+    }
+
+    // 寫入的欄位剛好是這幾個，時間是伺服器時間
+    function shapeIs(fields) {
+      return request.resource.data.keys().hasOnly(fields)
+        && request.resource.data.keys().hasAll(fields)
+        && request.resource.data.at == request.time;
+    }
+
+    function ownsNew() {
+      return signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    function ownsExisting() {
+      return signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // 上限比網頁上寬一倍：網頁用看得到的字數算，這裡 emoji 可能算成兩個
+    function textOk(max) {
+      return request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= max;
+    }
+
+    match /sessions/{sid} {
+      allow read: if knownSession(sid);
+      allow create, update: if knownSession(sid) && isHost()
+        && shapeIs(["activity", "at"])
+        && request.resource.data.activity in ["lobby", "poll", "cloud", "d1", "d2", "d3", "qa", "end"];
+
+      // 暖身投票：一人一票，文件 ID 是自己的 uid，可以改選
+      match /poll/{uid} {
+        allow read: if isHost() || (signedIn() && request.auth.uid == uid);
+        allow create, update: if knownSession(sid) && signedIn() && request.auth.uid == uid
+          && shapeIs(["choice", "at"])
+          && request.resource.data.choice is int
+          && request.resource.data.choice >= 0 && request.resource.data.choice <= 4
+          && activityIs(sid, "poll");
+      }
+
+      // 文字雲：每人最多 3 個詞，文件 ID 是 uid_0～uid_2，送出後不能改；講者可以隱藏
+      match /cloud/{id} {
+        allow read: if isHost() || ownsExisting();
+        allow create: if knownSession(sid) && ownsNew()
+          && id.matches(request.auth.uid + "_[0-2]")
+          && shapeIs(["uid", "text", "hidden", "at"]) && textOk(24)
+          && request.resource.data.hidden == false
+          && activityIs(sid, "cloud");
+        allow update: if isHost()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hidden"])
+          && request.resource.data.hidden is bool;
+      }
+
+      // 討論留言：每題每人最多 3 則，文件 ID 是 題號_uid_0～2；講者可以隱藏
+      match /comments/{id} {
+        allow read: if isHost() || ownsExisting();
+        allow create: if knownSession(sid) && ownsNew()
+          && request.resource.data.topic in ["d1", "d2", "d3"]
+          && id.matches(request.resource.data.topic + "_" + request.auth.uid + "_[0-2]")
+          && shapeIs(["uid", "topic", "text", "hidden", "at"]) && textOk(300)
+          && request.resource.data.hidden == false
+          && activityIs(sid, request.resource.data.topic);
+        allow update: if isHost()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hidden"])
+          && request.resource.data.hidden is bool;
+      }
+
+      // Q&A 提問：每人最多 3 題，沒被隱藏的大家都看得到；講者可以隱藏、標記已回答
+      match /questions/{id} {
+        allow read: if isHost()
+          || (signedIn() && (resource.data.hidden == false || resource.data.uid == request.auth.uid));
+        allow create: if knownSession(sid) && ownsNew()
+          && id.matches(request.auth.uid + "_[0-2]")
+          && shapeIs(["uid", "text", "hidden", "answered", "at"]) && textOk(300)
+          && request.resource.data.hidden == false
+          && request.resource.data.answered == false
+          && activityIs(sid, "qa");
+        allow update: if isHost()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hidden", "answered"])
+          && request.resource.data.hidden is bool
+          && request.resource.data.answered is bool;
+      }
+
+      // 幫問題按讚：每人每題一個，文件 ID 是 問題ID__uid，可以收回
+      match /votes/{id} {
+        allow read: if isHost() || ownsExisting();
+        allow create: if knownSession(sid) && ownsNew()
+          && shapeIs(["uid", "qid", "at"])
+          && request.resource.data.qid is string
+          && id == request.resource.data.qid + "__" + request.auth.uid
+          && exists(/databases/$(database)/documents/sessions/$(sid)/questions/$(request.resource.data.qid))
+          && activityIs(sid, "qa");
+        allow delete: if ownsExisting();
+      }
+    }
+  }
+}

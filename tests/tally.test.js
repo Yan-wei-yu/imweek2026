@@ -1,0 +1,51 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { countPoll, newestFirst, rankQuestions, wordFrequencies } from "../js/tally.js";
+
+test("countPoll 算每個選項幾票，範圍外或型別不對的不算", () => {
+  const responses = [{ choice: 0 }, { choice: 2 }, { choice: 2 }, { choice: 9 }, { choice: "1" }, {}];
+  assert.deepEqual(countPoll(responses, 5), { counts: [1, 0, 2, 0, 0], total: 3 });
+});
+
+test("countPoll 沒人投票時每個選項都是 0", () => {
+  assert.deepEqual(countPoll([], 3), { counts: [0, 0, 0], total: 0 });
+});
+
+test("wordFrequencies 合併同一個詞的不同寫法，顯示最多人用的寫法", () => {
+  const words = ["AI", "ai", "ＡＩ", "AI！", "好用", "好用", "方便"].map((text) => ({ text }));
+  assert.deepEqual(wordFrequencies(words), [["AI", 4], ["好用", 2], ["方便", 1]]);
+});
+
+test("wordFrequencies 次數一樣時照第一次出現的順序", () => {
+  const words = ["方便", "好用", "快"].map((text) => ({ text }));
+  assert.deepEqual(wordFrequencies(words), [["方便", 1], ["好用", 1], ["快", 1]]);
+});
+
+test("wordFrequencies 略過空白、只有標點和沒有文字的回答", () => {
+  assert.deepEqual(wordFrequencies([{ text: "  " }, { text: "！！" }, { text: undefined }, {}]), []);
+});
+
+test("rankQuestions 還沒回答的在前、讚多的在前、同票的先問先排", () => {
+  const questions = [
+    { id: "a", at: 1, answered: false },
+    { id: "b", at: 2, answered: false },
+    { id: "c", at: 3, answered: true },
+    { id: "d", at: 4, answered: false },
+  ];
+  const votes = ["b", "b", "c", "c", "c", "d", "a"].map((qid) => ({ qid }));
+  const ranked = rankQuestions(questions, votes);
+  assert.deepEqual(ranked.map((q) => [q.id, q.votes]), [["b", 2], ["a", 1], ["d", 1], ["c", 3]]);
+});
+
+test("rankQuestions 不改動傳進來的陣列和物件", () => {
+  const questions = [{ id: "a", at: 2, answered: false }, { id: "b", at: 1, answered: false }];
+  const before = structuredClone(questions);
+  rankQuestions(questions, [{ qid: "b" }]);
+  assert.deepEqual(questions, before);
+});
+
+test("newestFirst 新的排前面，不改動原本的陣列", () => {
+  const items = [{ id: "a", at: 1 }, { id: "b", at: 3 }, { id: "c", at: 2 }];
+  assert.deepEqual(newestFirst(items).map((item) => item.id), ["b", "c", "a"]);
+  assert.deepEqual(items.map((item) => item.id), ["a", "b", "c"]);
+});

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com; frame-src https://*.firebaseapp.com https://accounts.google.com; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="robots" content="noindex">
+<title>講者｜一起討論｜2026 資管週</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="vendor/qrcode.js" defer></script>
+<script src="vendor/wordcloud2.js" defer></script>
+<script type="module" src="js/host.js"></script>
+</head>
+<body class="host">
+<header class="host-bar">
+  <nav id="tabs" class="tabs" aria-label="切換題目"></nav>
+  <div class="host-tools">
+    <span id="flash" class="flash" role="status"></span>
+    <span id="session" class="session"></span>
+    <button id="qr-toggle" class="tool" type="button" title="顯示／隱藏角落的 QR code（按 Q）">QR</button>
+  </div>
+</header>
+<main id="stage" class="stage">
+  <p class="lead">載入中…</p>
+</main>
+<aside id="corner" class="corner" hidden>
+  <canvas id="corner-qr" role="img" aria-label="加入用的 QR code"></canvas>
+  <span id="corner-url"></span>
+</aside>
+<p id="demo" class="demo-banner" hidden>示範模式：還沒接上 Firebase。另開分頁打開 index.html 當學生，資料只存在這台電腦的瀏覽器</p>
+</body>
+</html>

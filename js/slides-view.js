@@ -1,7 +1,9 @@
 // 學生手機上的「跟著看簡報」：顯示講者正在播的那一頁；可以往回翻已經播過的頁，或點圖開大圖放大
-import { DECKS } from "./slides.js";
+import { DECKS, SLIDES_VERSION } from "./slides.js";
 import { slideImage } from "./slide-sync.js";
 import { h } from "./dom.js";
+
+const imageOf = (deck, index) => slideImage(DECKS, deck, index, SLIDES_VERSION);
 
 /**
  * @param {(...children: Node[]) => void} mount 把畫面放進主要區域
@@ -29,7 +31,11 @@ export function renderSlides(mount, onSession) {
     img.hidden = false;
     missing.hidden = true;
   });
-  img.addEventListener("error", () => showMissing("這一頁請看投影幕"));
+  img.addEventListener("error", () => {
+    // 拿掉 src：下次換頁或翻頁時會重新抓（例如 Wi-Fi 剛好斷了一下）
+    img.removeAttribute("src");
+    showMissing("這一頁請看投影幕");
+  });
 
   function showMissing(text) {
     img.hidden = true;
@@ -49,7 +55,7 @@ export function renderSlides(mount, onSession) {
     }
     const deck = DECKS[live.deck];
     const shown = viewing ?? live.index;
-    const src = slideImage(DECKS, live.deck, shown);
+    const src = imageOf(live.deck, shown);
     kicker.textContent = deck?.title ?? "跟著看簡報";
     if (src) {
       frame.href = src;
@@ -85,7 +91,7 @@ export function renderSlides(mount, onSession) {
     live = slide;
     draw();
     // 先抓下一頁，講者換頁時比較快出現
-    const upcoming = slide && slideImage(DECKS, slide.deck, slide.index + 1);
+    const upcoming = slide && imageOf(slide.deck, slide.index + 1);
     if (upcoming) new Image().src = upcoming;
   });
 }

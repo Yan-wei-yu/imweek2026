@@ -16,6 +16,9 @@ const FLASH_MS = 6000;
 // 同步小程式回報 PowerPoint 狀態的網址；從 GitHub Pages 打開時沒有這個，就手動切題
 const BRIDGE = "bridge/state";
 const BRIDGE_MS = 700;
+const BRIDGE_TIMEOUT_MS = 2000;
+// 同一份文件每秒最多寫一次（Firestore 的上限）；快速連續換頁時，等一下再寫停下來的那一頁
+const MIN_WRITE_GAP_MS = 1000;
 // 大廳和結束頁本身就有 QR code 或不需要，其他畫面在角落放一個小的給晚到的同學
 const NO_CORNER = new Set(["lobby", "end"]);
 // 第一次設定最常遇到的登入問題，直接說要去哪裡改
@@ -40,7 +43,10 @@ let store = null;
 let views = null;
 let activity = null;
 let lastSession = null;
-let synced = null;
+let synced = null; // 已經寫進資料庫的 { activity, slide }
+let lastWriteAt = 0;
+let writing = false;
+let bridgeStopped = false;
 let cleanup = () => {};
 let cornerWanted = true;
 let flashTimer = null;
@@ -171,45 +177,62 @@ function toggleCorner() {
   updateCorner();
 }
 
-/** 同步小程式回報的 PowerPoint 狀態；從 GitHub Pages 打開（沒有同步小程式）時回傳 null */
-async function readBridge() {
+/** 同步小程式在不在：從 GitHub Pages 打開時沒有，就手動切題 */
+async function bridgeAvailable() {
   try {
-    const response = await fetch(BRIDGE, { cache: "no-store" });
-    return response.ok ? await response.json() : null;
+    const response = await fetch(BRIDGE, { cache: "no-store", signal: AbortSignal.timeout(BRIDGE_TIMEOUT_MS) });
+    return response.ok;
   } catch {
-    return null;
+    return false;
   }
 }
 
-/** PowerPoint 換頁了就寫進場次：第三節的互動題那幾頁切成作答畫面，其他頁是「投影片」 */
-async function syncBridge() {
-  const state = await readBridge();
-  if (!state) {
-    bridgeEl.textContent = "同步程式沒有回應";
-    return;
-  }
-  bridgeEl.textContent = state.running ? `同步中：第 ${state.index} 頁` : "PowerPoint 沒有在放映";
-  const next = sessionFor(state, DECKS, SLIDE_ACTIVITIES);
-  if (!next || sameSession(next, synced)) return;
-  synced = next;
-  show(next.activity);
+/** 上方的同步狀態：讓講者一眼看出手機有沒有在跟 */
+function bridgeLabel(state, next) {
+  if (bridgeStopped) return "同步停止：Firebase 規則還沒發布，或這個帳號不是講者";
+  if (!state) return "同步程式沒有回應";
+  if (!state.running) return "PowerPoint 沒有在放映";
+  if (!next) return `不認得的簡報檔：${state.file ?? ""}`;
+  return `同步中：第 ${state.index} 頁`;
+}
+
+/**
+ * Worker 每 0.7 秒回報一次 PowerPoint 的狀態（null 是同步小程式沒回應）。換頁了就寫進場次：
+ * 第三節的互動題那幾頁切成作答畫面，其他頁是「投影片」。講者頁自己的畫面跟著資料庫走，寫入被擋就不會換
+ */
+async function onBridgeState(state) {
+  const next = state ? sessionFor(state, DECKS, SLIDE_ACTIVITIES) : null;
+  bridgeEl.textContent = bridgeLabel(state, next);
+  if (bridgeStopped || !next || sameSession(next, synced) || writing) return;
+  if (Date.now() - lastWriteAt < MIN_WRITE_GAP_MS) return; // 下一次回報再寫
+  writing = true;
+  lastWriteAt = Date.now();
   try {
     await store.set(P.session, { ...next, at: NOW });
+    synced = next;
   } catch (err) {
-    synced = null;
-    flash(err?.code === "permission-denied" ? "同步失敗：這個帳號沒有講者權限" : "同步失敗，檢查一下網路");
     report(err);
+    // 被規則擋下來不會自己好，停止同步、不要每 0.7 秒重送；網路問題下一次回報會再試
+    if (err?.code === "permission-denied") bridgeStopped = true;
+    else flash("同步失敗，檢查一下網路");
+    bridgeEl.textContent = bridgeLabel(state, next);
+  } finally {
+    writing = false;
   }
 }
 
 async function startBridge() {
-  if (!(await readBridge())) return;
+  if (!(await bridgeAvailable())) return;
   bridgeEl.hidden = false;
-  const tick = async () => {
-    await syncBridge();
-    setTimeout(tick, BRIDGE_MS);
-  };
-  tick();
+  const worker = new Worker(new URL("./bridge-worker.js", import.meta.url));
+  worker.addEventListener("message", ({ data }) => {
+    onBridgeState(data).catch(report);
+  });
+  worker.addEventListener("error", (event) => {
+    bridgeEl.textContent = "同步程式停了，請重新整理";
+    report(event);
+  });
+  worker.postMessage({ url: new URL(BRIDGE, location.href).href, interval: BRIDGE_MS, timeout: BRIDGE_TIMEOUT_MS });
 }
 
 function start() {

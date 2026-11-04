@@ -1,6 +1,6 @@
 // 講者頁每一題的畫面：大廳 QR code、投票長條圖、文字雲、留言牆、Q&A 排行
 import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
-import { DECKS } from "./slides.js";
+import { DECKS, SLIDES_VERSION } from "./slides.js";
 import { slideImage } from "./slide-sync.js";
 import { countPoll, newestFirst, rankQuestions, wordFrequencies } from "./tally.js";
 import { wordKey } from "./text.js";
@@ -120,7 +120,7 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report, on
     return onSession((session) => {
       const slide = session?.slide ?? null;
       const deck = slide ? DECKS[slide.deck] : null;
-      const src = slide ? slideImage(DECKS, slide.deck, slide.index) : null;
+      const src = slide ? slideImage(DECKS, slide.deck, slide.index, SLIDES_VERSION) : null;
       img.hidden = !src;
       if (src && img.getAttribute("src") !== src) img.src = src;
       if (!slide) label.textContent = "還沒開始放投影片";

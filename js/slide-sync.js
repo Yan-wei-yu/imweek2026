@@ -25,9 +25,13 @@ export function sameSession(a, b) {
     && a.slide?.index === b.slide?.index;
 }
 
-/** 某一頁投影片的圖片網址；不公開的簡報（count 是 0）或超出範圍回傳 null */
-export function slideImage(decks, deck, index) {
+/**
+ * 某一頁投影片的圖片網址；不公開的簡報（count 是 0）或超出範圍回傳 null。
+ * version 是匯出的時間，加在網址後面，重新匯出後手機不會拿到快取裡的舊圖
+ */
+export function slideImage(decks, deck, index, version = "") {
   const info = decks[deck];
   if (!info || !Number.isInteger(index) || index < 1 || index > info.count) return null;
-  return `slides/${deck}/${String(index).padStart(2, "0")}.webp`;
+  const file = `slides/${deck}/${String(index).padStart(2, "0")}.webp`;
+  return version ? `${file}?v=${encodeURIComponent(version)}` : file;
 }

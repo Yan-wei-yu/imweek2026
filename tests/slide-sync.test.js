@@ -38,6 +38,10 @@ test("sameSession 題目和頁數都一樣才算一樣", () => {
   assert.equal(sameSession(a, null), false);
 });
 
+test("slideImage 帶上匯出版本，重新匯出後手機不會拿到快取裡的舊圖", () => {
+  assert.equal(slideImage(DECKS, "s1", 4, "20261104-1652"), "slides/s1/04.webp?v=20261104-1652");
+});
+
 test("slideImage 給圖片網址；不公開的簡報或超出範圍回傳 null", () => {
   assert.equal(slideImage(DECKS, "s1", 4), "slides/s1/04.webp");
   assert.equal(slideImage(DECKS, "s3", 14), "slides/s3/14.webp");

@@ -1,5 +1,8 @@
 // 這個檔案是產生出來的，不要直接改：在 im-week-2026 執行 npm run live:slides
 
+// 匯出的時間：加在圖片網址後面，重新匯出後手機不會拿到快取裡的舊圖
+export const SLIDES_VERSION = "20261104-164019";
+
 export const DECKS = Object.freeze({
   "s1": {
     "title": "第一節　職涯與成長",

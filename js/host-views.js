@@ -140,18 +140,21 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report, on
     scene("poll", [
       ...heading(POLL.label, POLL.question), h("div", { class: "bars" }, rows.map((row) => row.el)), total, warning,
     ]);
-    // 學生手機投完票會看到即時結果：把票數整理成一份小文件，手機讀這一份就好
+    // 學生手機投完票會看到即時結果：把票數整理成一份小文件，手機讀這一份就好。
+    // 包一層 Promise：寫入當下就出錯（例如瀏覽器混用了快取裡的舊程式）也會顯示提醒，不會默默失敗
     const results = createThrottle({
       gapMs: RESULTS_GAP_MS,
-      send: ({ counts, total: n }) => store.set(P.pollResults, { counts, total: n, at: NOW }).then(() => {
-        warning.hidden = true;
-      }, (err) => {
-        report(err);
-        warning.hidden = false;
-        warning.textContent = err?.code === "permission-denied"
-          ? "學生手機看不到結果：Firebase 規則還沒發布新版"
-          : "學生手機的結果沒有更新，檢查一下網路";
-      }),
+      send: ({ counts, total: n }) => Promise.resolve()
+        .then(() => store.set(P.pollResults, { counts, total: n, at: NOW }))
+        .then(() => {
+          warning.hidden = true;
+        }, (err) => {
+          report(err);
+          warning.hidden = false;
+          warning.textContent = err?.code === "permission-denied"
+            ? "學生手機看不到結果：Firebase 規則還沒發布新版"
+            : "學生手機的結果沒有更新：按 Ctrl+F5 重新整理講者頁";
+        }),
     });
     const stop = store.watchQuery(P.poll, [], (docs) => {
       const tally = countPoll(docs, POLL.options.length);

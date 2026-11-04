@@ -12,6 +12,9 @@
   --accent-deep: #1F8F7C;
   --accent-soft: #15302C;
   --accent-ink: #0E0F12;
+  /* 學生手機上投票結果的比例條：一般選項淡一點，自己選的濃一點 */
+  --accent-fill: rgb(62 230 200 / 0.12);
+  --accent-fill-strong: rgb(62 230 200 / 0.26);
   --warn: #FFC857;
   --radius: 14px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -94,6 +97,9 @@ ul, ol { padding: 0; list-style: none; }
 
 .options { display: grid; gap: 12px; }
 .option {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 2.2rem 1fr;
   column-gap: 12px;
@@ -106,11 +112,35 @@ ul, ol { padding: 0; list-style: none; }
   text-align: left;
   transition: border-color 0.15s, background 0.15s, transform 0.15s var(--ease-out);
 }
+/* 投完票後的比例條：寬度由 --share（0～1）決定，畫在文字後面 */
+.option::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--accent-fill);
+  transform: scaleX(var(--share, 0));
+  transform-origin: left;
+  transition: transform 0.6s var(--ease-out);
+}
 .option .letter { grid-row: span 2; color: var(--accent); font-size: 1.4rem; font-weight: 700; }
 .option .name { font-size: 1.08rem; font-weight: 700; }
-.option .desc { color: var(--muted); font-size: 0.88rem; }
+.option .desc { grid-column: 2; color: var(--muted); font-size: 0.88rem; }
+/* 有結果之後才多一欄放百分比；固定寬度，數字從 9% 變 10% 時選項文字不會跳 */
+.options.with-results .option { grid-template-columns: 2.2rem 1fr auto; }
+.option .share {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  min-width: 3.2em;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 .option:active { transform: scale(0.98); }
 .option[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.option[aria-pressed="true"]::before { background: var(--accent-fill-strong); }
+.option[aria-pressed="true"] .share { color: var(--accent); }
 
 .compose { display: grid; gap: 10px; }
 .field {
@@ -226,6 +256,7 @@ ul, ol { padding: 0; list-style: none; }
   transition: transform 0.6s var(--ease-out);
 }
 .bar-row .value { font-size: clamp(1.1rem, 1.6vw, 1.8rem); font-variant-numeric: tabular-nums; text-align: right; }
+.count.warn-text { color: var(--warn); }
 
 .cloud-box { position: relative; height: 58vh; }
 .cloud-canvas { display: block; width: 100%; height: 100%; cursor: pointer; }

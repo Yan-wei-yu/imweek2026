@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { countPoll, newestFirst, rankQuestions, wordFrequencies } from "../js/tally.js";
+import { countPoll, newestFirst, pollShares, pollSummary, rankQuestions, wordFrequencies } from "../js/tally.js";
 
 test("countPoll 算每個選項幾票，範圍外或型別不對的不算", () => {
   const responses = [{ choice: 0 }, { choice: 2 }, { choice: 2 }, { choice: 9 }, { choice: "1" }, {}];
@@ -9,6 +9,25 @@ test("countPoll 算每個選項幾票，範圍外或型別不對的不算", () =
 
 test("countPoll 沒人投票時每個選項都是 0", () => {
   assert.deepEqual(countPoll([], 3), { counts: [0, 0, 0], total: 0 });
+});
+
+test("pollSummary 讀講者頁寫的統計，總數用各選項重新加總", () => {
+  const doc = { counts: [3, 0, 1, 0, 0], total: 99, at: 1, id: "poll" };
+  assert.deepEqual(pollSummary(doc, 5), { counts: [3, 0, 1, 0, 0], total: 4 });
+});
+
+test("pollSummary 還沒有統計、或格式不對時回傳 null", () => {
+  assert.equal(pollSummary(null, 5), null);
+  assert.equal(pollSummary({}, 5), null);
+  assert.equal(pollSummary({ counts: [1, 2, 3] }, 5), null);
+  assert.equal(pollSummary({ counts: [1, -1, 0, 0, 0] }, 5), null);
+  assert.equal(pollSummary({ counts: [1, 0.5, 0, 0, 0] }, 5), null);
+  assert.equal(pollSummary({ counts: ["1", 0, 0, 0, 0] }, 5), null);
+});
+
+test("pollShares 每個選項佔幾 %；沒人投票時都是 0", () => {
+  assert.deepEqual(pollShares({ counts: [1, 2, 0], total: 3 }), [33, 67, 0]);
+  assert.deepEqual(pollShares({ counts: [0, 0, 0], total: 0 }), [0, 0, 0]);
 });
 
 test("wordFrequencies 合併同一個詞的不同寫法，顯示最多人用的寫法", () => {

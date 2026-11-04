@@ -74,6 +74,16 @@ service cloud.firestore {
           && activityIs(sid, "poll");
       }
 
+      // 投票統計：講者頁每隔幾秒寫一次各選項票數；學生手機投完票後讀這一份，不用每個人都讀全部的票
+      match /results/{name} {
+        allow read: if knownSession(sid) && signedIn();
+        allow create, update: if knownSession(sid) && isHost() && name == "poll"
+          && shapeIs(["counts", "total", "at"])
+          && request.resource.data.counts is list
+          && request.resource.data.counts.size() == 5
+          && request.resource.data.total is int && request.resource.data.total >= 0;
+      }
+
       // 文字雲：每人最多 3 個詞，文件 ID 是 uid_0～uid_2，送出後不能改；講者可以隱藏
       match /cloud/{id} {
         allow read: if isHost() || ownsExisting();

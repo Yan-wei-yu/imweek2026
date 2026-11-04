@@ -3,11 +3,15 @@ import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
 import { DECKS, SLIDES_VERSION } from "./slides.js";
 import { slideImage } from "./slide-sync.js";
 import { countPoll, newestFirst, rankQuestions, wordFrequencies } from "./tally.js";
+import { NOW } from "./store-common.js";
+import { createThrottle } from "./throttle.js";
 import { wordKey } from "./text.js";
 import { drawQr } from "./qr.js";
 import { h } from "./dom.js";
 
 const LETTERS = "ABCDEFGHIJ";
+// 投票統計最多每 5 秒寫一次給學生手機：每寫一次，每支在看結果的手機各算一次讀取（免費額度一天 5 萬次）
+const RESULTS_GAP_MS = 5000;
 // 一次來很多筆時，文字雲最多每 1.2 秒重排一次；字太多會擠不下，只畫前 80 個
 const CLOUD_DELAY_MS = 1200;
 const CLOUD_MAX_WORDS = 80;
@@ -132,13 +136,35 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report, on
   function poll() {
     const rows = POLL.options.map((option, i) => barRow(option, LETTERS[i]));
     const total = h("p", { class: "count" }, "0 人作答");
-    scene("poll", [...heading(POLL.label, POLL.question), h("div", { class: "bars" }, rows.map((row) => row.el)), total]);
-    return store.watchQuery(P.poll, [], (docs) => {
-      const { counts, total: n } = countPoll(docs, POLL.options.length);
-      const top = Math.max(1, ...counts);
-      rows.forEach((row, i) => row.update(counts[i], n, top));
-      total.textContent = `${n} 人作答`;
+    const warning = h("p", { class: "count warn-text", hidden: true });
+    scene("poll", [
+      ...heading(POLL.label, POLL.question), h("div", { class: "bars" }, rows.map((row) => row.el)), total, warning,
+    ]);
+    // 學生手機投完票會看到即時結果：把票數整理成一份小文件，手機讀這一份就好
+    const results = createThrottle({
+      gapMs: RESULTS_GAP_MS,
+      send: ({ counts, total: n }) => store.set(P.pollResults, { counts, total: n, at: NOW }).then(() => {
+        warning.hidden = true;
+      }, (err) => {
+        report(err);
+        warning.hidden = false;
+        warning.textContent = err?.code === "permission-denied"
+          ? "學生手機看不到結果：Firebase 規則還沒發布新版"
+          : "學生手機的結果沒有更新，檢查一下網路";
+      }),
+    });
+    const stop = store.watchQuery(P.poll, [], (docs) => {
+      const tally = countPoll(docs, POLL.options.length);
+      const top = Math.max(1, ...tally.counts);
+      rows.forEach((row, i) => row.update(tally.counts[i], tally.total, top));
+      total.textContent = `${tally.total} 人作答`;
+      // 還沒人投票時不用寫：手機投完票才看結果，那時至少有一票；也避免剛開頁、資料還沒回來時先寫一份全是 0 的
+      if (tally.total > 0) results.push(tally);
     }, report);
+    return () => {
+      stop();
+      results.stop();
+    };
   }
 
   function cloud() {

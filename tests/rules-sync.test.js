@@ -50,6 +50,12 @@ test("講者能隱藏文字雲、留言和問題", () => {
 
 test("投票選項數一致", () => {
   assert.ok(rules.includes(`choice <= ${POLL.options.length - 1}`));
+  assert.ok(rules.includes(`counts.size() == ${POLL.options.length}`), "投票統計（results/poll）的選項數跟題目對不上");
+});
+
+test("投票統計只能寫在 results/poll（跟 store-common.js 的路徑一致）", () => {
+  assert.ok(rules.includes("match /results/{name}"));
+  assert.ok(rules.includes('name == "poll"'));
 });
 
 test("每人則數一致（文件 ID 的編號範圍）", () => {

@@ -4,7 +4,7 @@ import { NOW, nextSlot, paths } from "./store-common.js";
 import { LIMITS, currentSession } from "./config.js";
 import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
 import { charCount, cleanText, textProblem } from "./text.js";
-import { newestFirst } from "./tally.js";
+import { newestFirst, pollShares, pollSummary } from "./tally.js";
 import { renderSlides } from "./slides-view.js";
 import { h } from "./dom.js";
 
@@ -15,6 +15,8 @@ const RETRY_CODES = new Set(["auth/too-many-requests", "auth/quota-exceeded", "a
 const SIGN_IN_TRIES = 6;
 // 送出超過 8 秒還沒回應，多半是網路慢，先讓學生知道還在送
 const SLOW_MS = 8000;
+// 投完票 8 秒還等不到統計（講者頁沒開著），就請學生看投影幕
+const RESULTS_WAIT_MS = 8000;
 const view = document.getElementById("view");
 const statusEl = document.getElementById("status");
 // 還沒送出的字：講者換題再換回來時還在
@@ -170,26 +172,62 @@ function renderEnd() {
 }
 
 function renderPoll() {
-  const note = h("p", { class: "hint", role: "status" }, "選一個，送出後還可以改");
+  const note = h("p", { class: "hint", role: "status" }, "選一個，送出後就看得到大家的結果，也還可以改");
+  const shares = POLL.options.map(() => h("span", { class: "share", hidden: true }));
   const buttons = POLL.options.map((option, i) => h("button", {
     class: "option", type: "button", "aria-pressed": "false", onclick: () => choose(i),
   }, [
     h("span", { class: "letter" }, LETTERS[i]),
     h("span", { class: "name" }, option.name),
     h("span", { class: "desc" }, option.desc),
+    shares[i],
   ]));
-  mount(...heading(POLL.label, POLL.question), h("div", { class: "options" }, buttons), note);
+  const options = h("div", { class: "options" }, buttons);
+  const summary = h("p", { class: "note", hidden: true });
+  mount(...heading(POLL.label, POLL.question), options, note, summary);
 
   let alive = true;
+  let touched = false; // 這一頁已經自己點過：晚一步讀回來的舊選擇不要蓋掉畫面
   let chosen = null;
+  let stopResults = null;
+  let waitTimer = null;
   const mark = (choice) => buttons.forEach((button, i) => button.setAttribute("aria-pressed", String(i === choice)));
   store.getDoc(`${P.poll}/${me}`).then((mine) => {
-    if (!alive || !mine) return;
+    if (!alive || !mine || touched) return;
     chosen = mine.choice;
     mark(chosen);
+    showResults();
   }).catch(report);
 
+  /** 投過票才看得到結果（不會先被大家的選擇影響）：讀講者頁整理好的統計，每個選項後面畫出比例 */
+  function showResults() {
+    if (!alive || stopResults) return;
+    summary.hidden = false;
+    summary.textContent = "即時結果統計中…";
+    waitTimer = setTimeout(() => {
+      if (alive) summary.textContent = "結果請看投影幕";
+    }, RESULTS_WAIT_MS);
+    stopResults = store.watchDoc(P.pollResults, (doc) => {
+      const result = pollSummary(doc, POLL.options.length);
+      if (!result) return;
+      clearTimeout(waitTimer);
+      const percents = pollShares(result);
+      options.classList.add("with-results");
+      buttons.forEach((button, i) => {
+        button.style.setProperty("--share", String(percents[i] / 100));
+        shares[i].hidden = false;
+        shares[i].textContent = `${percents[i]}%`;
+      });
+      summary.textContent = `即時結果：共 ${result.total} 人作答`;
+    }, (err) => {
+      // 結果只是加分：讀不到（例如規則還沒更新）就不顯示，不要嚇到學生
+      report(err);
+      summary.hidden = true;
+    });
+  }
+
   async function choose(i) {
+    touched = true;
     mark(i);
     note.textContent = "送出中…";
     const slow = setTimeout(() => {
@@ -199,6 +237,7 @@ function renderPoll() {
       await store.set(`${P.poll}/${me}`, { choice: i, at: NOW });
       chosen = i;
       if (alive) note.textContent = `已送出：${LETTERS[i]} ${POLL.options[i].name}（想改可以再點別的）`;
+      showResults();
     } catch (err) {
       report(err);
       const message = await explain(err);
@@ -212,6 +251,8 @@ function renderPoll() {
   }
   return () => {
     alive = false;
+    clearTimeout(waitTimer);
+    stopResults?.();
   };
 }
 

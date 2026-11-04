@@ -1,11 +1,28 @@
-// 講者頁的統計：投票、文字雲字頻、Q&A 排序。都是純函式，不改動傳進來的資料
+// 統計：投票（講者頁和學生手機都用）、文字雲字頻、Q&A 排序。都是純函式，不改動傳進來的資料
 import { displayWord, wordKey } from "./text.js";
+
+const sum = (numbers) => numbers.reduce((total, n) => total + n, 0);
 
 /** 每個選項幾票；範圍外或型別不對的選項不算 */
 export function countPoll(responses, optionCount) {
   const counts = Array.from({ length: optionCount }, (_, i) => responses.filter(({ choice }) => choice === i).length);
-  return { counts, total: counts.reduce((sum, n) => sum + n, 0) };
+  return { counts, total: sum(counts) };
 }
+
+/**
+ * 講者頁寫進資料庫的投票統計（學生手機讀）；還沒有或格式不對回傳 null。
+ * 總數用各選項重新加總，不信任文件裡的 total
+ * @returns {{ counts: number[], total: number } | null}
+ */
+export function pollSummary(doc, optionCount) {
+  const counts = doc?.counts;
+  if (!Array.isArray(counts) || counts.length !== optionCount) return null;
+  if (!counts.every((n) => Number.isInteger(n) && n >= 0)) return null;
+  return { counts: [...counts], total: sum(counts) };
+}
+
+/** 每個選項佔幾 %（四捨五入到整數）；沒人投票時都是 0 */
+export const pollShares = ({ counts, total }) => counts.map((n) => (total > 0 ? Math.round((n / total) * 100) : 0));
 
 /** 出現最多次的寫法；一樣多就取先出現的 */
 function mostCommon(forms) {

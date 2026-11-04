@@ -8,6 +8,7 @@ test("paths 把每一種資料放在同一場活動底下", () => {
   assert.equal(p.session, "sessions/rehearsal");
   assert.equal(p.poll, "sessions/rehearsal/poll");
   assert.equal(p.votes, "sessions/rehearsal/votes");
+  assert.equal(p.pollResults, "sessions/rehearsal/results/poll");
 });
 
 test("nextSlot 回傳還沒用過的最小編號，用完了回傳 null", () => {

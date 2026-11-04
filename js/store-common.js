@@ -9,6 +9,8 @@ export function paths(sid) {
   return Object.freeze({
     session: root,
     poll: `${root}/poll`,
+    // 投票統計：講者頁寫，學生手機投完票後讀這一份就好
+    pollResults: `${root}/results/poll`,
     cloud: `${root}/cloud`,
     comments: `${root}/comments`,
     questions: `${root}/questions`,

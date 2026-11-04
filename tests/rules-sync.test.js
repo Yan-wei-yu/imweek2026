@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { ACTIVITIES } from "../js/activities.js";
 import { LIMITS, SESSIONS } from "../js/config.js";
 import { DISCUSSIONS, POLL } from "../js/questions.js";
+import { DECKS, SLIDE_ACTIVITIES } from "../js/slides.js";
 
 const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
 const list = (items) => `[${items.map((item) => `"${item}"`).join(", ")}]`;
@@ -15,6 +16,19 @@ test("場次清單一致", () => {
 
 test("講者能切換的題目一致", () => {
   assert.ok(rules.includes(`activity in ${list(ACTIVITIES.map((item) => item.id))}`));
+});
+
+test("簡報代號一致", () => {
+  assert.ok(rules.includes(`slide.deck in ${list(Object.keys(DECKS))}`));
+});
+
+test("簡報裡標的互動題都是講者能切換的題目", () => {
+  const ids = new Set(ACTIVITIES.map((item) => item.id));
+  for (const [deck, pages] of Object.entries(SLIDE_ACTIVITIES)) {
+    for (const [page, activity] of Object.entries(pages)) {
+      assert.ok(ids.has(activity), `${deck} 第 ${page} 頁的「${activity}」不在 activities.js 裡`);
+    }
+  }
 });
 
 test("討論題號一致", () => {

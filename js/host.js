@@ -1,19 +1,22 @@
-// 講者投影頁：切換題目、即時看結果。正式模式要用 Google 登入，而且帳號要寫在 firestore.rules 裡
+// 講者投影頁：切換題目、即時看結果。正式模式要用 Google 登入，而且帳號要寫在 firestore.rules 裡。
+// 從同步小程式（npm run live:bridge）打開時，會跟著 PowerPoint 自動換頁、切題
 import { createStore } from "./store.js";
 import { NOW, paths } from "./store-common.js";
-import { SESSIONS, currentSession } from "./config.js";
+import { PUBLIC_URL, SESSIONS, currentSession } from "./config.js";
 import { ACTIVITIES } from "./activities.js";
+import { DECKS, SLIDE_ACTIVITIES } from "./slides.js";
+import { sameSession, sessionFor } from "./slide-sync.js";
 import { createViews } from "./host-views.js";
 import { drawQr } from "./qr.js";
 import { h } from "./dom.js";
 
 const sid = currentSession();
 const P = paths(sid);
-// 學生頁跟講者頁放在同一個資料夾；彩排場的網址要帶上 ?s=
-const audienceUrl = new URL(sid === SESSIONS[0] ? "./" : `./?s=${sid}`, location.href).href;
-const shortUrl = audienceUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
 const FLASH_MS = 6000;
-// 大廳和結束頁本身就有 QR code 或不需要，其他題目在角落放一個小的給晚到的同學
+// 同步小程式回報 PowerPoint 狀態的網址；從 GitHub Pages 打開時沒有這個，就手動切題
+const BRIDGE = "bridge/state";
+const BRIDGE_MS = 700;
+// 大廳和結束頁本身就有 QR code 或不需要，其他畫面在角落放一個小的給晚到的同學
 const NO_CORNER = new Set(["lobby", "end"]);
 // 第一次設定最常遇到的登入問題，直接說要去哪裡改
 const SIGN_IN_ERRORS = {
@@ -30,10 +33,14 @@ const stage = document.getElementById("stage");
 const tabs = document.getElementById("tabs");
 const flashEl = document.getElementById("flash");
 const corner = document.getElementById("corner");
+const bridgeEl = document.getElementById("bridge");
+const sessionListeners = new Set();
 
 let store = null;
 let views = null;
 let activity = null;
+let lastSession = null;
+let synced = null;
 let cleanup = () => {};
 let cornerWanted = true;
 let flashTimer = null;
@@ -48,6 +55,23 @@ function flash(text) {
   flashTimer = setTimeout(() => {
     flashEl.textContent = "";
   }, FLASH_MS);
+}
+
+/** 學生頁的網址：正式模式一律用公開網址，示範模式用這台電腦上的學生頁；彩排場帶上 ?s= */
+function audienceLink(mode) {
+  const url = mode === "demo" ? new URL("./", location.href) : new URL(PUBLIC_URL);
+  const params = new URLSearchParams();
+  if (sid !== SESSIONS[0]) params.set("s", sid);
+  if (mode === "demo") params.set("demo", "1");
+  url.search = params.toString();
+  return url.href;
+}
+
+/** 場次狀態改變時通知（投影片畫面用）：先回一次目前的狀態；回傳取消函式 */
+function onSession(listener) {
+  sessionListeners.add(listener);
+  listener(lastSession);
+  return () => sessionListeners.delete(listener);
 }
 
 /** 讀一份只有講者讀得到的文件：被規則擋下來就不是講者（Firestore 不准用 __開頭結尾__ 的 ID） */
@@ -122,10 +146,12 @@ function show(id) {
   updateCorner();
 }
 
+/** 手動切題；目前播到哪一頁投影片照樣留著 */
 function go(id) {
   if (!id || id === activity) return;
   show(id);
-  store.set(P.session, { activity: id, at: NOW }).catch((err) => {
+  const slide = lastSession?.slide;
+  store.set(P.session, { activity: id, ...(slide ? { slide } : {}), at: NOW }).catch((err) => {
     flash(err?.code === "permission-denied" ? "切換失敗：這個帳號沒有講者權限" : "切換失敗，檢查一下網路");
     report(err);
   });
@@ -145,21 +171,69 @@ function toggleCorner() {
   updateCorner();
 }
 
+/** 同步小程式回報的 PowerPoint 狀態；從 GitHub Pages 打開（沒有同步小程式）時回傳 null */
+async function readBridge() {
+  try {
+    const response = await fetch(BRIDGE, { cache: "no-store" });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** PowerPoint 換頁了就寫進場次：第三節的互動題那幾頁切成作答畫面，其他頁是「投影片」 */
+async function syncBridge() {
+  const state = await readBridge();
+  if (!state) {
+    bridgeEl.textContent = "同步程式沒有回應";
+    return;
+  }
+  bridgeEl.textContent = state.running ? `同步中：第 ${state.index} 頁` : "PowerPoint 沒有在放映";
+  const next = sessionFor(state, DECKS, SLIDE_ACTIVITIES);
+  if (!next || sameSession(next, synced)) return;
+  synced = next;
+  show(next.activity);
+  try {
+    await store.set(P.session, { ...next, at: NOW });
+  } catch (err) {
+    synced = null;
+    flash(err?.code === "permission-denied" ? "同步失敗：這個帳號沒有講者權限" : "同步失敗，檢查一下網路");
+    report(err);
+  }
+}
+
+async function startBridge() {
+  if (!(await readBridge())) return;
+  bridgeEl.hidden = false;
+  const tick = async () => {
+    await syncBridge();
+    setTimeout(tick, BRIDGE_MS);
+  };
+  tick();
+}
+
 function start() {
+  const link = audienceLink(store.mode);
+  const shortUrl = link.replace(/^https?:\/\//, "").replace(/\/$/, "");
   document.getElementById("demo").hidden = store.mode !== "demo";
   document.getElementById("session").textContent = sid === SESSIONS[0] ? "" : `彩排場（${sid}）`;
-  views = createViews({ store, P, stage, audienceUrl, shortUrl, report });
+  views = createViews({ store, P, stage, audienceUrl: link, shortUrl, report, onSession });
   tabs.replaceChildren(...ACTIVITIES.map((item, i) => h("button", {
     class: "tab", type: "button", "data-id": item.id, title: `${item.label}（按 ${i + 1}）`, onclick: () => go(item.id),
   }, item.label)));
-  drawQr(document.getElementById("corner-qr"), audienceUrl, { size: 260 });
+  drawQr(document.getElementById("corner-qr"), link, { size: 260 });
   document.getElementById("corner-url").textContent = shortUrl;
   document.getElementById("qr-toggle").addEventListener("click", toggleCorner);
   document.addEventListener("keydown", onKey);
-  store.watchDoc(P.session, (session) => show(session?.activity ?? "lobby"), (err) => {
+  store.watchDoc(P.session, (session) => {
+    lastSession = session;
+    show(session?.activity ?? "lobby");
+    sessionListeners.forEach((listener) => listener(session));
+  }, (err) => {
     flash("連線中斷，請重新整理");
     report(err);
   });
+  startBridge();
 }
 
 async function main() {

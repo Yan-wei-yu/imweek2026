@@ -22,7 +22,9 @@ import { FIREBASE_CONFIG } from "./config.js";
  * @returns {Promise<Store>}
  */
 export async function createStore(role) {
-  if (FIREBASE_CONFIG) {
+  // 網址加 ?demo 可以強制用示範模式，在自己電腦上試，不會動到 Firebase 的資料
+  const forceDemo = new URLSearchParams(globalThis.location?.search ?? "").has("demo");
+  if (FIREBASE_CONFIG && !forceDemo) {
     const { createFirebaseStore } = await import("./store-firebase.js");
     return createFirebaseStore(FIREBASE_CONFIG, role);
   }

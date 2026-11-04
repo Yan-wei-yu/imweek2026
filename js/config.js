@@ -10,6 +10,9 @@ export const FIREBASE_CONFIG = Object.freeze({
   appId: "1:64099855213:web:90911bc69860f2062a0864",
 });
 
+// 學生頁的公開網址：講者頁不管從哪裡打開（例如同步小程式的本機網址），QR code 都指向這裡
+export const PUBLIC_URL = "https://yan-wei-yu.github.io/imweek2026/";
+
 // 講座當天用第一個；彩排在網址後面加 ?s=rehearsal，資料跟正式場分開。要跟 firestore.rules 一致
 export const SESSIONS = Object.freeze(["imweek2026", "rehearsal"]);
 

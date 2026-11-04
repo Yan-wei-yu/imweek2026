@@ -47,11 +47,22 @@ service cloud.firestore {
         && request.resource.data.text.size() <= max;
     }
 
+    // 講者正在播哪一份簡報的第幾頁（跟著看簡報用）
+    function slideOk(slide) {
+      return slide is map
+        && slide.keys().hasOnly(["deck", "index"]) && slide.keys().hasAll(["deck", "index"])
+        && slide.deck in ["s1", "s2", "s3"]
+        && slide.index is int && slide.index >= 1 && slide.index <= 99;
+    }
+
     match /sessions/{sid} {
       allow read: if knownSession(sid);
       allow create, update: if knownSession(sid) && isHost()
-        && shapeIs(["activity", "at"])
-        && request.resource.data.activity in ["lobby", "poll", "cloud", "d1", "d2", "d3", "qa", "end"];
+        && request.resource.data.keys().hasOnly(["activity", "slide", "at"])
+        && request.resource.data.keys().hasAll(["activity", "at"])
+        && request.resource.data.at == request.time
+        && request.resource.data.activity in ["lobby", "slides", "poll", "cloud", "d1", "d2", "d3", "qa", "end"]
+        && (!("slide" in request.resource.data) || slideOk(request.resource.data.slide));
 
       // 暖身投票：一人一票，文件 ID 是自己的 uid，可以改選
       match /poll/{uid} {

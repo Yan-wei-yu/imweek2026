@@ -147,6 +147,19 @@ ul, ol { padding: 0; list-style: none; }
 }
 .vote[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 
+.slide-frame {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.slide-img { display: block; width: 100%; height: auto; }
+.slide-missing { padding: 56px 16px; color: var(--muted); text-align: center; }
+.slide-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.slide-pos { color: var(--muted); font-size: 0.92rem; text-align: center; font-variant-numeric: tabular-nums; }
+.follow { justify-self: center; }
+
 /* ───── 講者投影頁 ───── */
 .host-bar {
   display: flex;
@@ -170,6 +183,15 @@ ul, ol { padding: 0; list-style: none; }
 .tab[aria-current="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .host-tools { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.9rem; }
 .flash { color: var(--warn); }
+.bridge { padding: 3px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 0.85rem; }
+.host-slide {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 58vh;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.45);
+}
 .session { color: var(--warn); font-weight: 700; }
 
 .stage { height: calc(100dvh - 58px); overflow: auto; padding: 4vh 4vw; }

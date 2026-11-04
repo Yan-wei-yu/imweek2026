@@ -1,5 +1,7 @@
 // 講者頁每一題的畫面：大廳 QR code、投票長條圖、文字雲、留言牆、Q&A 排行
 import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
+import { DECKS } from "./slides.js";
+import { slideImage } from "./slide-sync.js";
 import { countPoll, newestFirst, rankQuestions, wordFrequencies } from "./tally.js";
 import { wordKey } from "./text.js";
 import { drawQr } from "./qr.js";
@@ -84,9 +86,10 @@ function drawCloud(canvas, list, onPick) {
 
 /**
  * @param {{ store: import("./store.js").Store, P: ReturnType<typeof import("./store-common.js").paths>,
- *   stage: HTMLElement, audienceUrl: string, shortUrl: string, report: (err: unknown) => void }} deps
+ *   stage: HTMLElement, audienceUrl: string, shortUrl: string, report: (err: unknown) => void,
+ *   onSession: (listener: (session: object | null) => void) => () => void }} deps
  */
-export function createViews({ store, P, stage, audienceUrl, shortUrl, report }) {
+export function createViews({ store, P, stage, audienceUrl, shortUrl, report, onSession }) {
   const scene = (className, children) => stage.replaceChildren(h("section", { class: `scene ${className}` }, children));
   const heading = (kicker, title) => [h("p", { class: "kicker" }, kicker), h("h1", { class: "scene-title" }, title)];
   const setFlag = (path, fields) => store.update(path, fields).catch(report);
@@ -103,6 +106,27 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report }) 
       h("div", { class: "qr-card" }, canvas),
     ]);
     drawQr(canvas, audienceUrl, { size: 900 });
+  }
+
+  /** 跟著看簡報：學生手機正在看的那一頁 */
+  function slides() {
+    const img = h("img", { class: "host-slide", alt: "" });
+    const label = h("p", { class: "count" });
+    scene("slides", [
+      h("p", { class: "kicker" }, "跟著看簡報"),
+      h("h1", { class: "scene-title" }, "學生手機正在跟著看投影片"),
+      img, label,
+    ]);
+    return onSession((session) => {
+      const slide = session?.slide ?? null;
+      const deck = slide ? DECKS[slide.deck] : null;
+      const src = slide ? slideImage(DECKS, slide.deck, slide.index) : null;
+      img.hidden = !src;
+      if (src && img.getAttribute("src") !== src) img.src = src;
+      if (!slide) label.textContent = "還沒開始放投影片";
+      else if (deck?.count === 0) label.textContent = `${deck.title}　第 ${slide.index} 頁（這一節不公開，手機上顯示「請看投影幕」）`;
+      else label.textContent = `${deck?.title ?? slide.deck}　第 ${slide.index} 頁`;
+    });
   }
 
   function poll() {
@@ -233,6 +257,7 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report }) 
 
   const scenes = new Map([
     ["lobby", lobby],
+    ["slides", slides],
     ["poll", poll],
     ["cloud", cloud],
     ...DISCUSSIONS.map((item) => [item.id, () => discussion(item)]),

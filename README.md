@@ -1,19 +1,30 @@
-# 2026 資管週｜第三節即時互動頁
+# 2026 資管週｜即時互動頁
 
-學生用手機掃 QR code 加入，不用登入、全程匿名。講者切到哪一題，手機就顯示哪一題：
+學生用手機掃 QR code 加入，不用登入、全程匿名。
 
-暖身投票（單選）→ 文字雲（一個詞）→ 討論 01～03（留言）→ Q&A（提問、幫別人的問題按讚）
+- **跟著看簡報**：第一、三節播投影片時，手機上顯示講者正在播的那一頁，可以往回翻、開大圖放大（課程表那種小字的頁特別好用）。第二節用了公司內容，手機上只顯示「這一節請看投影幕」
+- **第三節的互動**：暖身投票（單選）→ 文字雲（一個詞）→ 討論 01～03（留言）→ Q&A（提問、幫別人的問題按讚）。講者播到那一頁，手機自動切成作答畫面
 
 | 頁面 | 給誰 | 用途 |
 | --- | --- | --- |
-| `index.html` | 學生（手機） | 作答、留言、提問 |
+| `index.html` | 學生（手機） | 跟著看簡報、作答、留言、提問 |
 | `host.html` | 講者（投影） | 切換題目、即時看結果、隱藏不適當的留言 |
 
 網頁放在 GitHub Pages，資料存在 Firebase（Firestore），兩個都用免費方案。
 
+## 跟著看簡報
+
+1. 投影片定稿後，在 `im-week-2026` 資料夾執行 `npm run live:slides`：把第一、三節匯出成圖片（`slides/`），並更新 `js/slides.js`（頁數、第三節哪幾頁是互動題）。再把 `live/` 推上 GitHub
+2. 講座當天在播放的筆電上執行 `npm run live:bridge`，用瀏覽器打開它印出來的網址 <http://localhost:8790/host.html>，用 Google 登入
+3. 照平常一樣用 PowerPoint 放映、換頁。講者頁上方會顯示「同步中：第 N 頁」，學生手機跟著換；播到第三節的投票、文字雲、討論、Q&A 那幾頁，手機自動切成作答畫面
+4. 想讓手機停在某一題（例如投影片已經往下播，但還想多收一點回答）：在講者頁手動按那一題；下次 PowerPoint 換頁時才會再跟著走
+
+- 投影片圖片放在 GitHub Pages，等於是公開的
+- 同步小程式只有這台電腦連得到（127.0.0.1）。從 GitHub Pages 打開的講者頁不會同步，要手動切題
+
 ## 先試用：示範模式
 
-`js/config.js` 的 `FIREBASE_CONFIG` 還是 `null` 時，頁面會用示範模式，資料只存在這台電腦的瀏覽器。用同一個瀏覽器開一個分頁 `host.html`、再開幾個分頁 `index.html`，就能把整個流程走一遍。
+`js/config.js` 的 `FIREBASE_CONFIG` 還是 `null`，或網址加上 `?demo=1` 時，頁面會用示範模式，資料只存在這台電腦的瀏覽器。用同一個瀏覽器開一個分頁 `host.html?demo=1`、再開幾個分頁 `index.html?demo=1`，就能把整個流程走一遍。從同步小程式打開（<http://localhost:8790/host.html?demo=1>）也能試 PowerPoint 同步。
 
 頁面要用 http 開（直接點兩下 html 檔案不行）。在 `im-week-2026` 資料夾執行：
 
@@ -38,7 +49,7 @@ python -m http.server 8766 --bind 127.0.0.1 --directory live
 
 ## 免費額度要注意的地方
 
-- Firestore 免費方案每天 5 萬次讀取，在台灣時間下午 4 點重置，剛好在第三節中間。一場一兩百人的講座大約用掉 1～3 萬次
+- Firestore 免費方案每天 5 萬次讀取，在台灣時間下午 4 點重置，剛好在第三節中間。一兩百人從第一節跟著看簡報、加上第三節的互動，大約用掉 2～4 萬次
 - 前一天下午 4 點之後的彩排，會算進講座當天的額度，彩排用幾支手機就好
 - 用完的話，所有讀寫都會失敗。想更保險，可以把專案升級成 Blaze（用多少付多少，這種用量大概幾塊錢台幣）並設定預算提醒；這一步要綁信用卡，由你決定
 
@@ -49,7 +60,7 @@ python -m http.server 8766 --bind 127.0.0.1 --directory live
 
 ## 講座當天
 
-- 開場前打開 `host.html`、按 F11 全螢幕，停在「大廳」讓大家掃 QR code。用你設定時登入的同一個 Chrome，並允許這個網站彈出視窗
+- 13:20 之前：在播放的筆電執行 `npm run live:bridge`，打開 <http://localhost:8790/host.html> 登入，停在「大廳」讓大家掃 QR code；開始放映第一節後就會自動同步。用你設定時登入的同一個 Chrome，並允許這個網站彈出視窗
 - 切換題目：上方的按鈕、方向鍵 ← →、簡報筆的上下頁（PageUp／PageDown）、數字鍵 1～8
 - 不適當的留言或問題：滑鼠移過去按 × 或「隱藏」；文字雲上不適當的詞：直接點那個詞。下方「已隱藏」都可以恢復
 - Q&A 讚多的排前面，回答完按「已回答」會移到最下面
@@ -84,7 +95,10 @@ live/
 │   ├── audience.js         學生頁
 │   ├── host.js、host-views.js   講者頁
 │   ├── store*.js           資料存取：Firebase 或示範模式
+│   ├── slides.js           投影片的頁數、第三節的互動題（自動產生）
+│   ├── slides-view.js、slide-sync.js   跟著看簡報
 │   └── text.js、tally.js、dom.js、qr.js、activities.js
+├── slides/                 投影片圖片（npm run live:slides 產生）
 ├── firestore.rules         資料規則（要貼到 Firebase 主控台）
 ├── tests/                  npm test
 └── vendor/                 wordcloud2.js、qrcode-generator（MIT）

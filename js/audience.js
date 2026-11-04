@@ -5,6 +5,7 @@ import { LIMITS, currentSession } from "./config.js";
 import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
 import { charCount, cleanText, textProblem } from "./text.js";
 import { newestFirst } from "./tally.js";
+import { renderSlides } from "./slides-view.js";
 import { h } from "./dom.js";
 
 const P = paths(currentSession());
@@ -24,6 +25,15 @@ let me = null;
 let current = null;
 let cleanup = () => {};
 let accountWarning = "";
+let lastSession = null;
+const sessionListeners = new Set();
+
+/** 講者換頁時通知（跟著看簡報用）：先回一次目前的狀態；回傳取消函式 */
+function onSession(listener) {
+  sessionListeners.add(listener);
+  listener(lastSession);
+  return () => sessionListeners.delete(listener);
+}
 
 const mount = (...children) => view.replaceChildren(...children);
 const heading = (kicker, title) => [h("p", { class: "kicker" }, kicker), h("h1", {}, title)];
@@ -329,6 +339,7 @@ function renderQA() {
 
 const RENDERERS = new Map([
   ["lobby", renderLobby],
+  ["slides", () => renderSlides(mount, onSession)],
   ["poll", renderPoll],
   ["cloud", renderCloud],
   ...DISCUSSIONS.map((discussion) => [discussion.id, () => renderDiscussion(discussion)]),
@@ -378,7 +389,11 @@ async function main() {
   // 講者頁和學生頁在同一個瀏覽器會共用登入：用講者帳號作答，會算在講者身上
   accountWarning = user.isAnonymous ? "" : "目前是講者帳號，請用無痕視窗試學生頁";
   setStatus(accountWarning || (navigator.onLine ? "" : "目前沒有網路"), Boolean(accountWarning) || !navigator.onLine);
-  store.watchDoc(P.session, (session) => show(session?.activity), watchFailed);
+  store.watchDoc(P.session, (session) => {
+    lastSession = session;
+    show(session?.activity);
+    sessionListeners.forEach((listener) => listener(session));
+  }, watchFailed);
 }
 
 window.addEventListener("offline", () => setStatus("目前沒有網路", true));

@@ -55,6 +55,12 @@ service cloud.firestore {
         && slide.index is int && slide.index >= 1 && slide.index <= 99;
     }
 
+    // 匿名問這一頁：問的是哪一份簡報的第幾頁
+    function pageOk(data) {
+      return data.deck in ["s1", "s2", "s3"]
+        && data.page is int && data.page >= 1 && data.page <= 99;
+    }
+
     match /sessions/{sid} {
       allow read: if knownSession(sid);
       allow create, update: if knownSession(sid) && isHost()
@@ -111,16 +117,19 @@ service cloud.firestore {
           && request.resource.data.hidden is bool;
       }
 
-      // Q&A 提問：每人最多 3 題，沒被隱藏的大家都看得到；講者可以隱藏、標記已回答
+      // 提問：每人最多 5 題，沒被隱藏的大家都看得到；講者可以隱藏、標記已回答。兩種來源合算：
+      // Q&A 那一頁送的（只有切到 Q&A 時收得到）、跟著看簡報時「匿名問這一頁」送的（多記 deck、page，放投影片時都收得到）
       match /questions/{id} {
         allow read: if isHost()
           || (signedIn() && (resource.data.hidden == false || resource.data.uid == request.auth.uid));
         allow create: if knownSession(sid) && ownsNew()
-          && id.matches(request.auth.uid + "_[0-2]")
-          && shapeIs(["uid", "text", "hidden", "answered", "at"]) && textOk(300)
+          && id.matches(request.auth.uid + "_[0-4]")
+          && textOk(300)
           && request.resource.data.hidden == false
           && request.resource.data.answered == false
-          && activityIs(sid, "qa");
+          && ((shapeIs(["uid", "text", "hidden", "answered", "at"]) && activityIs(sid, "qa"))
+            || (shapeIs(["uid", "text", "hidden", "answered", "deck", "page", "at"]) && pageOk(request.resource.data)
+              && activityIs(sid, "slides")));
         allow update: if isHost()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hidden", "answered"])
           && request.resource.data.hidden is bool

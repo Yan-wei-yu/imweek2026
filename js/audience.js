@@ -6,6 +6,8 @@ import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
 import { charCount, cleanText, textProblem } from "./text.js";
 import { newestFirst, pollShares, pollSummary } from "./tally.js";
 import { renderSlides } from "./slides-view.js";
+import { DECKS } from "./slides.js";
+import { askTarget, pageLabel, pageQuestionFields } from "./page-question.js";
 import { h } from "./dom.js";
 
 const P = paths(currentSession());
@@ -159,6 +161,99 @@ function submissions({ path, filters, prefix, max, form, render }) {
   };
 }
 
+/**
+ * 匿名問這一頁：放在跟著看簡報的投影片下面。畫面上是哪一頁，由 slides-view.js 呼叫 show() 告訴這裡；
+ * 打開輸入框之後，講者換頁不會改掉要問的頁（page-question.js 的 askTarget）
+ */
+function pageAsker() {
+  const max = LIMITS.questions;
+  let shown = null;
+  let target = null;
+  let open = false;
+  let full = false;
+  // 送出中：自己的清單會先出現還沒確認的那一題；送滿第 5 題時先別收起來，萬一被擋下來，錯誤訊息才看得到
+  let sending = false;
+  const opener = h("button", { class: "btn ghost ask-open", type: "button", onclick: () => setOpen(true) });
+  const which = h("p", { class: "ask-target" });
+  const close = h("button", { class: "tool", type: "button", onclick: () => setOpen(false) }, "收起來");
+  const sent = h("p", { class: "hint", role: "status" });
+  const left = h("p", { class: "note" });
+  const list = h("ul", { class: "mine", "aria-label": "你問過的問題" });
+  const form = textForm({
+    key: "ask", label: "你的問題", placeholder: "這一頁哪裡想問？", max: LIMITS.questionLength, multiline: true,
+    async onSubmit(text) {
+      const asked = target;
+      if (!asked) throw new Error("還不知道要問哪一頁");
+      sending = true;
+      try {
+        await subs.add(pageQuestionFields(me, text, asked));
+      } finally {
+        sending = false;
+      }
+      setOpen(false);
+      sent.textContent = `已送出（${pageLabel(DECKS, asked)}），講者會在休息或 Q&A 時回答`;
+    },
+  });
+  const panel = h("div", { class: "ask-panel", hidden: true }, [h("div", { class: "ask-head" }, [which, close]), form.el]);
+
+  function refresh() {
+    opener.hidden = open;
+    opener.disabled = !shown || full;
+    opener.textContent = shown ? "匿名問這一頁" : "講者開始放投影片後就能提問";
+    panel.hidden = !open;
+    which.textContent = target ? `問的是：${pageLabel(DECKS, target)}` : "";
+  }
+
+  function setOpen(next) {
+    open = next && Boolean(shown) && !full;
+    if (open) {
+      target = shown;
+      sent.textContent = "";
+      // 上一題留下的「已送出」不要出現在新打開的輸入框底下
+      panel.querySelector(".compose .hint").textContent = "";
+    }
+    refresh();
+    if (open) panel.querySelector(".field")?.focus();
+  }
+
+  const subs = submissions({
+    path: P.questions, filters: [["uid", me]], prefix: `${me}_`, max, form,
+    render(mine) {
+      full = mine.length >= max;
+      if (full && !sending) open = false;
+      list.replaceChildren(...newestFirst(mine).map((question) => h("li", {}, [
+        pageLabel(DECKS, question) ? h("span", { class: "page" }, pageLabel(DECKS, question)) : null,
+        question.text,
+      ])));
+      left.textContent = full
+        ? `已經問了 ${max} 題，謝謝！`
+        : `看不懂、想多聽的地方都可以問。匿名，講者看不到是誰問的；每人最多 ${max} 題（跟 Q&A 合算）`;
+      refresh();
+    },
+  });
+
+  return {
+    el: h("section", { class: "ask", "aria-label": "匿名問這一頁" }, [opener, panel, sent, left, list]),
+    /** 畫面上換了一頁；byStudent 是學生自己翻的（不是講者換頁） */
+    show(next, byStudent) {
+      shown = next;
+      target = askTarget(target, shown, { open, byStudent });
+      refresh();
+    },
+    stop: subs.stop,
+  };
+}
+
+/** 跟著看簡報，投影片下面可以匿名問這一頁 */
+function renderFollowAlong() {
+  const asker = pageAsker();
+  const stop = renderSlides(mount, onSession, asker);
+  return () => {
+    stop();
+    asker.stop();
+  };
+}
+
 function renderLobby() {
   mount(
     ...heading(EVENT.section, EVENT.title),
@@ -309,7 +404,10 @@ function renderQA() {
   const subs = submissions({
     path: P.questions, filters: [["uid", me]], prefix: `${me}_`, max, form,
     render(mine) {
-      left.textContent = mine.length < max ? `匿名提問，每人最多 ${max} 題` : `已經問了 ${max} 題，謝謝！`;
+      // 跟「匿名問這一頁」合算：之前問過的也算在裡面
+      left.textContent = mine.length < max
+        ? `匿名提問，每人最多 ${max} 題，還可以問 ${max - mine.length} 題`
+        : `已經問了 ${max} 題，謝謝！`;
     },
   });
 
@@ -340,8 +438,10 @@ function renderQA() {
     }
     const { el, text, tags, button } = items.get(question.id);
     const on = voted.has(question.id);
+    const where = pageLabel(DECKS, question);
     text.textContent = question.text;
     tags.replaceChildren(...[
+      where ? h("span", { class: "tag" }, where) : null,
       question.uid === me ? h("span", { class: "tag" }, "你問的") : null,
       question.answered ? h("span", { class: "tag done" }, "已回答") : null,
     ].filter(Boolean));
@@ -380,7 +480,7 @@ function renderQA() {
 
 const RENDERERS = new Map([
   ["lobby", renderLobby],
-  ["slides", () => renderSlides(mount, onSession)],
+  ["slides", renderFollowAlong],
   ["poll", renderPoll],
   ["cloud", renderCloud],
   ...DISCUSSIONS.map((discussion) => [discussion.id, () => renderDiscussion(discussion)]),

@@ -1,6 +1,7 @@
 // 學生手機上的「跟著看簡報」：顯示講者正在播的那一頁；可以往回翻已經播過的頁，或點圖開大圖放大
 import { DECKS, SLIDES_VERSION } from "./slides.js";
 import { slideImage } from "./slide-sync.js";
+import { shownPage } from "./page-question.js";
 import { h } from "./dom.js";
 
 const imageOf = (deck, index) => slideImage(DECKS, deck, index, SLIDES_VERSION);
@@ -8,9 +9,11 @@ const imageOf = (deck, index) => slideImage(DECKS, deck, index, SLIDES_VERSION);
 /**
  * @param {(...children: Node[]) => void} mount 把畫面放進主要區域
  * @param {(listener: (session: object | null) => void) => () => void} onSession 講者換頁時通知；回傳取消函式
+ * @param {{ el: HTMLElement, show: (page: { deck: string, page: number } | null, byStudent: boolean) => void } | null} [asker]
+ *   匿名問這一頁（放在投影片下面）：每次換頁都告訴它畫面上是哪一頁
  * @returns {() => void} 離開這個畫面時的清理
  */
-export function renderSlides(mount, onSession) {
+export function renderSlides(mount, onSession, asker = null) {
   const kicker = h("p", { class: "kicker" }, "跟著看簡報");
   const img = h("img", { class: "slide-img", alt: "", decoding: "async" });
   const missing = h("p", { class: "slide-missing", hidden: true });
@@ -19,10 +22,11 @@ export function renderSlides(mount, onSession) {
   const prev = h("button", { class: "tool", type: "button", onclick: () => move(-1) }, "‹ 上一頁");
   const next = h("button", { class: "tool", type: "button", onclick: () => move(1) }, "下一頁 ›");
   const follow = h("button", { class: "btn follow", type: "button", hidden: true, onclick: () => view(null) }, "回到講者這一頁");
-  mount(
+  mount(...[
     kicker, frame, h("div", { class: "slide-nav" }, [prev, position, next]), follow,
     h("p", { class: "note" }, "點投影片可以開大圖，再用兩指放大"),
-  );
+    asker?.el,
+  ].filter(Boolean));
 
   let live = null; // 講者正在播的 { deck, index }
   let viewing = null; // 自己往回翻時在看的頁數；null 是跟著講者
@@ -44,7 +48,9 @@ export function renderSlides(mount, onSession) {
     frame.removeAttribute("href");
   }
 
-  function draw() {
+  /** @param {boolean} [byStudent] 這次是學生自己翻頁（不是講者換頁） */
+  function draw(byStudent = false) {
+    asker?.show(shownPage(live, viewing), byStudent);
     if (!live) {
       showMissing("講者還沒開始放投影片");
       position.textContent = "";
@@ -81,7 +87,7 @@ export function renderSlides(mount, onSession) {
 
   function view(index) {
     viewing = index;
-    draw();
+    draw(true);
   }
 
   return onSession((session) => {

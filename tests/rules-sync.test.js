@@ -6,6 +6,7 @@ import { ACTIVITIES } from "../js/activities.js";
 import { LIMITS, SESSIONS } from "../js/config.js";
 import { DISCUSSIONS, POLL } from "../js/questions.js";
 import { DECKS, SLIDE_ACTIVITIES } from "../js/slides.js";
+import { pageQuestionFields } from "../js/page-question.js";
 
 const rules = readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
 const list = (items) => `[${items.map((item) => `"${item}"`).join(", ")}]`;
@@ -37,7 +38,8 @@ test("討論題號一致", () => {
 
 test("每一種回答都只在對應的題目收得到", () => {
   const ids = new Set(ACTIVITIES.map((item) => item.id));
-  for (const activity of ["poll", "cloud", "qa"]) {
+  // slides：「匿名問這一頁」只在放投影片時收得到（大廳、結束畫面不收）
+  for (const activity of ["poll", "cloud", "qa", "slides"]) {
     assert.ok(ids.has(activity), `activities.js 少了 ${activity}`);
     assert.ok(rules.includes(`activityIs(sid, "${activity}")`), `規則裡找不到 activityIs(sid, "${activity}")`);
   }
@@ -56,6 +58,15 @@ test("投票選項數一致", () => {
 test("投票統計只能寫在 results/poll（跟 store-common.js 的路徑一致）", () => {
   assert.ok(rules.includes("match /results/{name}"));
   assert.ok(rules.includes('name == "poll"'));
+});
+
+test("匿名問這一頁寫進資料庫的欄位跟規則一致", () => {
+  const fields = [...Object.keys(pageQuestionFields("uid", "text", { deck: "s1", page: 1 })), "at"];
+  assert.ok(rules.includes(`shapeIs(${list(fields)})`), `規則裡找不到 shapeIs(${list(fields)})`);
+});
+
+test("匿名問這一頁的簡報代號一致", () => {
+  assert.ok(rules.includes(`data.deck in ${list(Object.keys(DECKS))}`));
 });
 
 test("每人則數一致（文件 ID 的編號範圍）", () => {

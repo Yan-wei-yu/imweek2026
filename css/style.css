@@ -190,6 +190,14 @@ ul, ol { padding: 0; list-style: none; }
 .slide-pos { color: var(--muted); font-size: 0.92rem; text-align: center; font-variant-numeric: tabular-nums; }
 .follow { justify-self: center; }
 
+/* 匿名問這一頁：學生手機上，投影片下面 */
+.ask { display: grid; gap: 10px; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--line); }
+.btn.ghost.ask-open { color: var(--accent); border-color: var(--accent-deep); }
+.ask-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--accent-deep); border-radius: var(--radius); background: var(--accent-soft); }
+.ask-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ask-target { color: var(--accent); font-weight: 700; }
+.mine .page { display: block; color: var(--accent); font-size: 0.8rem; font-weight: 700; }
+
 /* ───── 講者投影頁 ───── */
 .host-bar {
   display: flex;
@@ -305,8 +313,20 @@ ul, ol { padding: 0; list-style: none; }
 .qa-row.answered { opacity: 0.45; }
 .qa-votes { color: var(--accent); font-size: clamp(1.6rem, 2.4vw, 2.6rem); font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
 .qa-text { font-size: clamp(1.1rem, 1.6vw, 1.8rem); line-height: 1.45; }
+.qa-body { display: grid; gap: 4px; }
 .row-tools { display: flex; gap: 8px; opacity: 0; transition: opacity 0.15s; }
-.qa-row:hover .row-tools, .row-tools:focus-within { opacity: 1; }
+:is(.qa-row, .asked-item):hover .row-tools, .row-tools:focus-within { opacity: 1; }
+
+/* 講者頁「投影片」畫面：右邊是學生匿名問的問題 */
+.scene.slides { grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); align-items: start; column-gap: 3vw; }
+.slides-main { display: grid; gap: 2.6vh; align-content: start; }
+.asked { display: grid; gap: 1.2vh; align-content: start; }
+.asked-title { font-size: clamp(1.2rem, 1.8vw, 2rem); }
+.asked-list { display: grid; gap: 1vh; }
+.asked-item { display: grid; gap: 6px; padding: 1.2vh 1.2vw; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.asked-item.answered { opacity: 0.45; }
+.asked-text { font-size: clamp(1rem, 1.3vw, 1.4rem); line-height: 1.45; }
+.asked-page, .qa-page { color: var(--accent); font-weight: 700; font-size: clamp(0.85rem, 1vw, 1.1rem); }
 
 .tray { color: var(--muted); font-size: 0.95rem; }
 .tray summary { cursor: pointer; }
@@ -347,7 +367,7 @@ body:has(.corner:not([hidden])) .stage { padding-right: calc(6vw + max(130px, 10
 }
 
 @media (max-width: 900px) {
-  .lobby { grid-template-columns: 1fr; }
+  .lobby, .scene.slides { grid-template-columns: 1fr; }
   .qr-big { width: min(70vw, 50vh); }
   .bar-row { grid-template-columns: 2.4rem 1fr auto; }
   .bar-row .track { grid-column: 1 / -1; }

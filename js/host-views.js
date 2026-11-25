@@ -3,6 +3,7 @@ import { CLOUD, DISCUSSIONS, EVENT, POLL, QA } from "./questions.js";
 import { DECKS, SLIDES_VERSION } from "./slides.js";
 import { slideImage } from "./slide-sync.js";
 import { countPoll, newestFirst, rankQuestions, wordFrequencies } from "./tally.js";
+import { askedOrder, pageLabel } from "./page-question.js";
 import { NOW } from "./store-common.js";
 import { createThrottle } from "./throttle.js";
 import { wordKey } from "./text.js";
@@ -112,16 +113,52 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report, on
     drawQr(canvas, audienceUrl, { size: 900 });
   }
 
-  /** 跟著看簡報：學生手機正在看的那一頁 */
+  /** 已回答／隱藏：學生提問和 Q&A 共用 */
+  const questionTools = (question) => h("div", { class: "row-tools" }, [
+    h("button", {
+      class: "tool", type: "button", onclick: () => setFlag(`${P.questions}/${question.id}`, { answered: !question.answered }),
+    }, question.answered ? "改回未回答" : "已回答"),
+    h("button", {
+      class: "tool", type: "button", onclick: () => setFlag(`${P.questions}/${question.id}`, { hidden: true }),
+    }, "隱藏"),
+  ]);
+
+  /** 學生「匿名問這一頁」的問題：標著第幾節第幾頁，還沒回答的在前、新的在前（休息時切過來看） */
+  function askedPanel() {
+    const list = h("ol", { class: "asked-list" });
+    const count = h("p", { class: "count" }, "還沒有人提問");
+    const tray = createTray((item) => setFlag(`${P.questions}/${item.id}`, { hidden: false }));
+    const row = (question) => h("li", { class: question.answered ? "asked-item answered" : "asked-item" }, [
+      h("span", { class: "asked-page" }, pageLabel(DECKS, question) || "Q&A"),
+      h("p", { class: "asked-text" }, question.text),
+      questionTools(question),
+    ]);
+    const el = h("aside", { class: "asked", "aria-label": "學生提問" }, [
+      h("h2", { class: "asked-title" }, "學生提問"), count, list, tray.el,
+    ]);
+    const stop = store.watchQuery(P.questions, [], (docs) => {
+      const shown = askedOrder(docs.filter((question) => !question.hidden));
+      list.replaceChildren(...shown.map(row));
+      count.textContent = shown.length > 0 ? `${shown.length} 個問題` : "還沒有人提問";
+      tray.update(docs.filter((question) => question.hidden));
+    }, report);
+    return { el, stop };
+  }
+
+  /** 跟著看簡報：學生手機正在看的那一頁，旁邊是學生提問 */
   function slides() {
     const img = h("img", { class: "host-slide", alt: "" });
     const label = h("p", { class: "count" });
+    const asked = askedPanel();
     scene("slides", [
-      h("p", { class: "kicker" }, "跟著看簡報"),
-      h("h1", { class: "scene-title" }, "學生手機正在跟著看投影片"),
-      img, label,
+      h("div", { class: "slides-main" }, [
+        h("p", { class: "kicker" }, "跟著看簡報"),
+        h("h1", { class: "scene-title" }, "學生手機正在跟著看投影片"),
+        img, label,
+      ]),
+      asked.el,
     ]);
-    return onSession((session) => {
+    const stopSlides = onSession((session) => {
       const slide = session?.slide ?? null;
       const deck = slide ? DECKS[slide.deck] : null;
       const src = slide ? slideImage(DECKS, slide.deck, slide.index, SLIDES_VERSION) : null;
@@ -131,6 +168,10 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report, on
       else if (deck?.count === 0) label.textContent = `${deck.title}　第 ${slide.index} 頁（這一節不公開，手機上顯示「請看投影幕」）`;
       else label.textContent = `${deck?.title ?? slide.deck}　第 ${slide.index} 頁`;
     });
+    return () => {
+      stopSlides();
+      asked.stop();
+    };
   }
 
   function poll() {
@@ -251,15 +292,11 @@ export function createViews({ store, P, stage, audienceUrl, shortUrl, report, on
     let votes = [];
     const row = (question) => h("li", { class: question.answered ? "qa-row answered" : "qa-row" }, [
       h("span", { class: "qa-votes", "aria-label": `${question.votes} 個讚` }, String(question.votes)),
-      h("p", { class: "qa-text" }, question.text),
-      h("div", { class: "row-tools" }, [
-        h("button", {
-          class: "tool", type: "button", onclick: () => setFlag(`${P.questions}/${question.id}`, { answered: !question.answered }),
-        }, question.answered ? "改回未回答" : "已回答"),
-        h("button", {
-          class: "tool", type: "button", onclick: () => setFlag(`${P.questions}/${question.id}`, { hidden: true }),
-        }, "隱藏"),
+      h("div", { class: "qa-body" }, [
+        pageLabel(DECKS, question) ? h("span", { class: "qa-page" }, pageLabel(DECKS, question)) : null,
+        h("p", { class: "qa-text" }, question.text),
       ]),
+      questionTools(question),
     ]);
     const draw = () => {
       const shown = rankQuestions(questions.filter((question) => !question.hidden), votes);

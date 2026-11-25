@@ -17,12 +17,13 @@ export const PUBLIC_URL = "https://yan-wei-yu.github.io/imweek2026/";
 export const SESSIONS = Object.freeze(["imweek2026", "rehearsal"]);
 
 // 每人能送幾則、每則幾個字。則數要跟 firestore.rules 一致（規則裡的 _[0-2] 就是最多 3 則）
+// questions 是 Q&A 和「匿名問這一頁」合算（規則裡是 _[0-4]）
 export const LIMITS = Object.freeze({
   words: 3,
   wordLength: 12,
   comments: 3,
   commentLength: 150,
-  questions: 3,
+  questions: 5,
   questionLength: 150,
 });
 
